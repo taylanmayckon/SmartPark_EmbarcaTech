@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(SmartPark main.c )
+add_executable(SmartPark main.c libs/ssd1306.c)
 
 pico_set_program_name(SmartPark "SmartPark")
 pico_set_program_version(SmartPark "0.1")
@@ -46,7 +46,10 @@ pico_enable_stdio_usb(SmartPark 1)
 
 # Add the standard library to the build
 target_link_libraries(SmartPark
-        pico_stdlib)
+        pico_stdlib
+        hardware_adc
+        hardware_pwm
+        hardware_i2c)
 
 # Add the standard include files to the build
 target_include_directories(SmartPark PRIVATE
