@@ -114,7 +114,7 @@ void customer_select_spot(uint16_t x_value, uint16_t y_value){
     }
 
     // Controle de tempo para a navegação do display
-    if(current_time - customer_spot_select_spotview_time > 300000){ // 300ms de intervalo
+    if(current_time - customer_spot_select_spotview_time > 200000){ // 200ms de intervalo
         customer_spot_select_spotview_time = current_time; // Atualiza o tempo
 
         // Navegação esquerda-direita
