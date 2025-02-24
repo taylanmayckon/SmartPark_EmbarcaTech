@@ -12,11 +12,15 @@
 #define DISPLAY_ADDRESS 0x3C
 ssd1306_t ssd; // Inicializa a estrutura do display no escopo global
 bool cor = true; // Booleano que indica a cor branca do pixel
-
 // Definições para o Joystick e ADC
 #define JOYSTICK_X 27
 #define JOYSTICK_Y 26
 #define JOYSTICK_BUTTON 22
+// Definições dos botões
+#define BUTTON_A 5
+#define BUTTON_B 6
+// Definindo a máscara de entrada
+#define INPUT_MASK ((1 << JOYSTICK_BUTTON) | (1 << BUTTON_A) | (1 << BUTTON_B))
 
 // Variáveis para controle visual do display dos clientes
 int customer_standby_count = 0; // Contagem de reticências do display de standby
@@ -31,6 +35,9 @@ int customer_spot_select_spacer_value = 0; // Controla o espaçamento entre o nu
 char converted_num; // Variável que armazena o número convertido em char
 char converted_string[3]; // String que armazena o número convertido, no formato a ser exibido no display
 
+// Variáveis para o controle da interrupção
+uint32_t last_interrupt_time = 0;
+
 // Vetor indicativo do estado das vagas
 bool spots_state[25] = {
     0, 0, 0, 0, 0,
@@ -40,6 +47,16 @@ bool spots_state[25] = {
 };
 
 
+
+// Função de tratamento de interrupções
+void gpio_irq_handler(uint gpio, uint32_t events){
+    // Tratamento do debounce
+    uint32_t current_time = to_us_since_boot(get_absolute_time()); // Obtendo o tempo atual
+    if(current_time - last_interrupt_time > 200000){ // Debounce setado para 200ms
+        last_interrupt_time = current_time; // Atualizando o tempo da ultima interrupção
+        printf("Interrupção acionada");
+    }
+}
 
 
 void generate_border(){
@@ -212,9 +229,17 @@ int main(){
     adc_gpio_init(JOYSTICK_X); // Canal 1
     adc_gpio_init(JOYSTICK_Y); // Canal 0
 
+    // Iniciando os pinos dos botões
+    gpio_init_mask(INPUT_MASK);
+    // Habilitando os pull ups internos
+    gpio_pull_up(BUTTON_A);
+    gpio_pull_up(BUTTON_B);
+    gpio_pull_up(JOYSTICK_BUTTON);
 
-
-
+    // Configurando a interrupção dos botões
+    gpio_set_irq_enabled_with_callback(BUTTON_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+    gpio_set_irq_enabled_with_callback(BUTTON_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+    gpio_set_irq_enabled_with_callback(JOYSTICK_BUTTON, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
     while (true) {
         // Leituras do ADC
@@ -246,7 +271,7 @@ int main(){
 
         ssd1306_send_data(&ssd); // Envia os dados para o display, atualizando o mesmo
 
-        printf("Joystick X: %d | Joystick Y: %d\n", vrx_value, vry_value); // Teste da USB
+        //printf("Joystick X: %d | Joystick Y: %d\n", vrx_value, vry_value); // Teste da USB
         sleep_ms(30);
     }
 }
