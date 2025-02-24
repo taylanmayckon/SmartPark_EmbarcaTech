@@ -79,11 +79,6 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 }
                 break;
         }
-
-        if(gpio == JOYSTICK_BUTTON){
-            display_mode = !display_mode; // Troca o modo de visualização
-            display_page = 0; // Vai para a primeira tela do display
-        }
         
     }
 }
@@ -299,6 +294,9 @@ int main(){
                     break;
                 case 1: // Tela de seleção de vaga
                     customer_select_spot(vrx_value, vry_value);
+                    break;
+                case 2:
+                    display_page = 1; // Placeholder para não ir para tela inexistente
                     break;
             }
         }
