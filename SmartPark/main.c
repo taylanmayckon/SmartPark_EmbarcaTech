@@ -36,7 +36,10 @@ char converted_num; // Variável que armazena o número convertido em char
 char converted_string[3]; // String que armazena o número convertido, no formato a ser exibido no display
 
 // Variáveis para o controle da interrupção
-uint32_t last_interrupt_time = 0;
+uint32_t last_interrupt_time = 0; // Controla o debounce da interrupção
+int display_page = 0; // Controla que página será exibida
+bool display_mode = true; // Controla o modo de visualização (cliente ou proprietário)
+
 
 // Vetor indicativo do estado das vagas
 bool spots_state[25] = {
@@ -54,7 +57,34 @@ void gpio_irq_handler(uint gpio, uint32_t events){
     uint32_t current_time = to_us_since_boot(get_absolute_time()); // Obtendo o tempo atual
     if(current_time - last_interrupt_time > 200000){ // Debounce setado para 200ms
         last_interrupt_time = current_time; // Atualizando o tempo da ultima interrupção
-        printf("Interrupção acionada");
+
+        switch(gpio){
+            case JOYSTICK_BUTTON:
+                display_mode = !display_mode; // Troca o modo de visualização
+                display_page = 0; // Vai para a primeira tela do display
+                break;
+            case BUTTON_A:
+                display_page--; // Decrementa, navegando para a tela anterior
+                if(display_page<0){
+                    display_page=0; // Impede que vá para uma tela inválida
+                }
+                break;
+            case BUTTON_B:
+                display_page++; // Incrementa, navegando para a próxima tela
+                if (display_mode && display_page>3){ // Se tiver na tela do cliente, página acima de 3
+                    display_page=3; // Força para que mantenha a tela 3
+                }
+                if (!display_mode && display_page>3){ // Se tiver na tela do proprietário, página acima de 3
+                    display_page=3; // Força para que mantenha a tela 3
+                }
+                break;
+        }
+
+        if(gpio == JOYSTICK_BUTTON){
+            display_mode = !display_mode; // Troca o modo de visualização
+            display_page = 0; // Vai para a primeira tela do display
+        }
+        
     }
 }
 
@@ -261,12 +291,17 @@ int main(){
         ssd1306_fill(&ssd, false); // Limpa o display
 
         generate_border(); // Gera a borda com largura de 2 pixels
-        
-        //customer_standby(); // Tela de standby para o cliente
 
-        customer_select_spot(vrx_value, vry_value); // Tela de seleção de vaga para o cliente
-        
-
+        if(display_mode){ // true = Tela do cliente
+            switch(display_page){
+                case 0: // Tela de standby, aguardando interação
+                    customer_standby();
+                    break;
+                case 1: // Tela de seleção de vaga
+                    customer_select_spot(vrx_value, vry_value);
+                    break;
+            }
+        }
 
 
         ssd1306_send_data(&ssd); // Envia os dados para o display, atualizando o mesmo
