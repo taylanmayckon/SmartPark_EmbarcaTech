@@ -84,7 +84,7 @@ void int_2_char(int num, char *out){
 }
 
 // Função para seleção de vaga por parte do usuário
-void customer_select_spot(){
+void customer_select_spot(uint16_t x_value, uint16_t y_value){
     ssd1306_rect(&ssd, 0, 0, 127, 11, cor, cor); // Borda superior
 
     uint32_t current_time = to_us_since_boot(get_absolute_time()); // Pega o tempo de execução atual
@@ -113,18 +113,45 @@ void customer_select_spot(){
             break;
     }
 
+    // Controle de tempo para a navegação do display
+    if(current_time - customer_spot_select_spotview_time > 300000){ // 300ms de intervalo
+        customer_spot_select_spotview_time = current_time; // Atualiza o tempo
+
+        // Navegação esquerda-direita
+        if(x_value>3000){ // Joystick para a direita
+            customer_spot_select_spotview_value++; // Altera para a vaga da direita (+1)
+        } else if(x_value<1000){ // Joystick para a esquerda
+            customer_spot_select_spotview_value--; // Altera para a vaga da esquerda (-1)
+        }
+
+        if(y_value>3000){ // Joystick para cima
+            customer_spot_select_spotview_value-=5; // Altera para a vaga de cima (-5)
+        } else if(y_value<1000){ // Joystick para baixo
+            customer_spot_select_spotview_value+=5; // Altera para a vaga de baixo (+5)
+        }
+
+        // Condicionais para não ultrapassar o limite de vags
+        if(customer_spot_select_spotview_value<0){ // Se tentar menor que 0, joga para a última
+            customer_spot_select_spotview_value=24;
+        }
+        else if(customer_spot_select_spotview_value>24){ // Se tentar maior que 24, joga para a primeira
+            customer_spot_select_spotview_value=0;
+        }
+        
+    }
+
 
     int line_select = 0; // Variável que aponta para a linha de vagas a ser escrita (zerada antes de cada loop for a seguir)
     // Visualização de todas as vagas possíveis no display
     for(int i=0; i<25; i++){
         if(i%5==0){ // Troca a linha quando ultrapassar 5 iterações e reseta o spacer das vagas
-            line_select++;
-            customer_spot_select_spacer_value = 0;
+            line_select++; // Alterna as linhas, por meio de incremento dessa variável
+            customer_spot_select_spacer_value = 0; // Para alternar o espaçamento necessário entre as vagas da linha
         }
 
         // Tratamento do visual da vaga selecionada
         if (i == customer_spot_select_spotview_value){ // Se a iteração atual for a vaga selecionada
-            customer_spot_select_info_bool = true; // Vai realizar a inversão da fonte
+            customer_spot_select_info_bool = true; // Vai realizar a inversão da fonte do numero da vaga
             ssd1306_rect(&ssd, 4+(8*line_select)+(1*line_select), 5+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 19, 9, cor, cor); // Gera o branco da vaga selecionada
         }
         else{
@@ -132,21 +159,21 @@ void customer_select_spot(){
         }
 
         if(i<9){ // Gera string para as menores que 10
-            int_2_char(i+1, &converted_num);
+            int_2_char(i+1, &converted_num); // Converte o dígito à direita do número para char
             converted_string[0] = '0'; // Char para melhorar o visual
             converted_string[1] = converted_num; // Int convertido para char
             converted_string[2] = '\0'; // Terminador nulo da String
             ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool);
         }
         else if(i<19){ // Gera string para as menores que 20 e maiores que 10
-            int_2_char(i-9, &converted_num);
+            int_2_char(i-9, &converted_num); // Converte o dígito à direita do número para char
             converted_string[0] = '1'; // Char para melhorar o visual
             converted_string[1] = converted_num; // Int convertido para char
             converted_string[2] = '\0'; // Terminador nulo da String
             ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool);
         }
         else{ // Gera a string para as maiores que 20
-            int_2_char(i-19, &converted_num);
+            int_2_char(i-19, &converted_num); // Converte o dígito à direita do número para char
             converted_string[0] = '2'; // Char para melhorar o visual
             converted_string[1] = converted_num; // Int convertido para char
             converted_string[2] = '\0'; // Terminador nulo da String
@@ -212,7 +239,7 @@ int main(){
         
         //customer_standby(); // Tela de standby para o cliente
 
-        customer_select_spot(); // Tela de seleção de vaga para o cliente
+        customer_select_spot(vrx_value, vry_value); // Tela de seleção de vaga para o cliente
         
 
 
