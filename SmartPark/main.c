@@ -37,7 +37,7 @@ int main(){
 
         // Limpa o display
         ssd1306_fill(&ssd, false);
-        ssd1306_draw_string(&ssd, "Teste", 59, 27); // Quadrado preenchido
+        ssd1306_draw_string(&ssd, "Teste", 59, 27, true); // Quadrado preenchido
         ssd1306_send_data(&ssd); // Envia os dados para o display, atualizando o mesmo
 
         printf("Hello, world!\n"); // Teste da USB
