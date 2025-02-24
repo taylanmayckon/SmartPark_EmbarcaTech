@@ -171,6 +171,12 @@ void ssd1306_draw_char(ssd1306_t *ssd, char c, uint8_t x, uint8_t y, bool invers
   else if(c == '*'){ // Quadrado preenchido
     index = 63*8;
   }
+  else if(c == '!'){ // Quadrado preenchido
+    index = 64*8;
+  }
+  else if(c == '.'){ // Quadrado preenchido
+    index = 65*8;
+  }
 
   // Aqui ele realiza a operação de inversão de cores do bit, caso seja solicitado
   if(inverse){
