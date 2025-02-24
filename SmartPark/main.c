@@ -19,8 +19,28 @@ bool cor = true; // Booleano que indica a cor branca do pixel
 #define JOYSTICK_BUTTON 22
 
 // Variáveis para controle visual do display dos clientes
-int customer_standby_count = 0;
-uint32_t customer_standby_time = 0;
+int customer_standby_count = 0; // Contagem de reticências do display de standby
+uint32_t customer_standby_time = 0; // Controle de tempo do display de standby
+
+int customer_spot_select_info_count = 0; // Controla a mensagem exibida em cima na seleção de vagas
+uint32_t customer_spot_select_info_time = 0; // Controla o tempo de alternar a mensagem superior na seleção de vagas
+int customer_spot_select_spotview_value = 0; // Variável que controla a navegação do usuário entre as vagas
+uint32_t customer_spot_select_spotview_time = 0; // Variável para controlar o tempo de alternagem entre as vagas no display
+bool customer_spot_select_info_bool = false; // Altera o visual da vaga a ser selecionada
+int customer_spot_select_spacer_value = 0; // Controla o espaçamento entre o numero das vagas no display
+char converted_num; // Variável que armazena o número convertido em char
+char converted_string[3]; // String que armazena o número convertido, no formato a ser exibido no display
+
+// Vetor indicativo do estado das vagas
+bool spots_state[25] = {
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+};
+
+
+
 
 void generate_border(){
     ssd1306_rect(&ssd, 0, 0, 127, 2, cor, cor); // Borda superior, altura=2
@@ -29,6 +49,7 @@ void generate_border(){
     ssd1306_rect(&ssd, 0, 125, 2, 63, cor, cor); // Borda direita, largura=2
 }
 
+// Função para o standby do usuário
 void customer_standby(){
     uint32_t current_time = to_us_since_boot(get_absolute_time());
 
@@ -55,6 +76,89 @@ void customer_standby(){
         customer_standby_count = 0;
     }
 }
+
+
+// Função que converte int para char
+void int_2_char(int num, char *out){
+    *out = '0' + num;
+}
+
+// Função para seleção de vaga por parte do usuário
+void customer_select_spot(){
+    ssd1306_rect(&ssd, 0, 0, 127, 11, cor, cor); // Borda superior
+
+    uint32_t current_time = to_us_since_boot(get_absolute_time()); // Pega o tempo de execução atual
+
+    // Condicional para controlar a informação superior de forma periódica
+    if(current_time - customer_spot_select_info_time > 4000000){ // 4 segundos de intervalo
+        customer_spot_select_info_time = current_time; // Atualiza o tempo
+        customer_spot_select_info_count++; // Atualiza a variável do switch que controla o texto exposto em cima
+    }
+
+    // Limita o contador para o texto superior
+    if(customer_spot_select_info_count>2){
+        customer_spot_select_info_count = 0;
+    }
+
+    // Switch/case para selecionar a informação na parte superior
+    switch(customer_spot_select_info_count){
+        case 0:
+            ssd1306_draw_string(&ssd, "Selecione", 28, 2, true); // Texto superior em negativo
+            break;
+        case 1:
+            ssd1306_draw_string(&ssd, "Confirme com B", 7, 2, true); // Texto superior em negativo
+            break;
+        case 2:
+            ssd1306_draw_string(&ssd, "Cancele com A", 11, 2, true); // Texto superior em negativo
+            break;
+    }
+
+
+    int line_select = 0; // Variável que aponta para a linha de vagas a ser escrita (zerada antes de cada loop for a seguir)
+    // Visualização de todas as vagas possíveis no display
+    for(int i=0; i<25; i++){
+        if(i%5==0){ // Troca a linha quando ultrapassar 5 iterações e reseta o spacer das vagas
+            line_select++;
+            customer_spot_select_spacer_value = 0;
+        }
+
+        // Tratamento do visual da vaga selecionada
+        if (i == customer_spot_select_spotview_value){ // Se a iteração atual for a vaga selecionada
+            customer_spot_select_info_bool = true; // Vai realizar a inversão da fonte
+            ssd1306_rect(&ssd, 4+(8*line_select)+(1*line_select), 5+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 19, 9, cor, cor); // Gera o branco da vaga selecionada
+        }
+        else{
+            customer_spot_select_info_bool = false; // Se não, mantém o estado padrão
+        }
+
+        if(i<9){ // Gera string para as menores que 10
+            int_2_char(i+1, &converted_num);
+            converted_string[0] = '0'; // Char para melhorar o visual
+            converted_string[1] = converted_num; // Int convertido para char
+            converted_string[2] = '\0'; // Terminador nulo da String
+            ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool);
+        }
+        else if(i<19){ // Gera string para as menores que 20 e maiores que 10
+            int_2_char(i-9, &converted_num);
+            converted_string[0] = '1'; // Char para melhorar o visual
+            converted_string[1] = converted_num; // Int convertido para char
+            converted_string[2] = '\0'; // Terminador nulo da String
+            ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool);
+        }
+        else{ // Gera a string para as maiores que 20
+            int_2_char(i-19, &converted_num);
+            converted_string[0] = '2'; // Char para melhorar o visual
+            converted_string[1] = converted_num; // Int convertido para char
+            converted_string[2] = '\0'; // Terminador nulo da String
+            ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool);
+        }
+
+        customer_spot_select_spacer_value++; // Incrementa o spacer para separar as vagas no display
+    }
+
+}
+
+
 
 int main(){
     stdio_init_all();
@@ -107,6 +211,11 @@ int main(){
         generate_border(); // Gera a borda com largura de 2 pixels
         
         //customer_standby(); // Tela de standby para o cliente
+
+        customer_select_spot(); // Tela de seleção de vaga para o cliente
+        
+
+
 
         ssd1306_send_data(&ssd); // Envia os dados para o display, atualizando o mesmo
 

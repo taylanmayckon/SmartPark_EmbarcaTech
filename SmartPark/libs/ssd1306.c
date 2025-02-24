@@ -171,10 +171,10 @@ void ssd1306_draw_char(ssd1306_t *ssd, char c, uint8_t x, uint8_t y, bool invers
   else if(c == '*'){ // Quadrado preenchido
     index = 63*8;
   }
-  else if(c == '!'){ // Quadrado preenchido
+  else if(c == '!'){ // Exclamação
     index = 64*8;
   }
-  else if(c == '.'){ // Quadrado preenchido
+  else if(c == '.'){ // Ponto simples
     index = 65*8;
   }
 
