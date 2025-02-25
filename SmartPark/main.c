@@ -35,6 +35,8 @@ int customer_spot_select_spacer_value = 0; // Controla o espaçamento entre o nu
 char converted_num; // Variável que armazena o número convertido em char
 char converted_string[3]; // String que armazena o número convertido, no formato a ser exibido no display
 
+bool busy_spot_popup = false; // Booleano para controlar o popup caso a vaga do cliente esteja ocupada na tela de seleção
+
 // Variáveis para o controle da interrupção
 uint32_t last_interrupt_time = 0; // Controla o debounce da interrupção
 int display_page = 0; // Controla que página será exibida
@@ -43,7 +45,7 @@ bool display_mode = true; // Controla o modo de visualização (cliente ou propr
 
 // Vetor indicativo do estado das vagas
 bool spots_state[25] = {
-    0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
@@ -70,12 +72,21 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 }
                 break;
             case BUTTON_B:
-                display_page++; // Incrementa, navegando para a próxima tela
-                if (display_mode && display_page>3){ // Se tiver na tela do cliente, página acima de 3
-                    display_page=3; // Força para que mantenha a tela 3
+                if(busy_spot_popup){ // Condição para desativar o popup
+                    busy_spot_popup = false;
                 }
-                if (!display_mode && display_page>3){ // Se tiver na tela do proprietário, página acima de 3
-                    display_page=3; // Força para que mantenha a tela 3
+                else if(display_page==1 && display_mode && spots_state[customer_spot_select_spotview_value] && !busy_spot_popup){ // Condição para ativar popup
+                    // Tem que estar na tela de seleção, no display dos clientes, com uma vaga selecionada no estado ocupado e o popup inicialmente tem que estar desativado
+                    busy_spot_popup = true; // Para ativar o popup de tela ocupada
+                }
+                else{ // Se não for nenhum dos casos acima, ele mantém o fluxo e passa para a próxima tela
+                    display_page++; // Incrementa, navegando para a próxima tela
+                    if (display_mode && display_page>3){ // Se tiver na tela do cliente, página acima de 3
+                        display_page=3; // Força para que mantenha a tela 3
+                    }
+                    if (!display_mode && display_page>3){ // Se tiver na tela do proprietário, página acima de 3
+                        display_page=3; // Força para que mantenha a tela 3
+                    }
                 }
                 break;
         }
@@ -228,6 +239,17 @@ void customer_select_spot(uint16_t x_value, uint16_t y_value){
 }
 
 
+// Função para o popup  caso selecione vaga ocupada na função acima
+void customer_busy_spot_func(){
+    ssd1306_rect(&ssd, 16, 10, 108, 39, cor, !cor);
+    ssd1306_rect(&ssd, 18, 12, 104, 35, cor, cor); // Cria o retangulo do popup
+    ssd1306_draw_string(&ssd, "VAGA OCUPADA", 16, 22, true);
+    ssd1306_draw_string(&ssd, "PARA VOLTAR", 20, 32, true);
+    ssd1306_draw_string(&ssd, "PRESSIONE B", 20, 42, true);
+
+}
+
+
 
 int main(){
     stdio_init_all();
@@ -294,6 +316,9 @@ int main(){
                     break;
                 case 1: // Tela de seleção de vaga
                     customer_select_spot(vrx_value, vry_value);
+                    if(busy_spot_popup){ // Ativa o popup informativo caso tente selecionar uma vaga ocupada
+                        customer_busy_spot_func();
+                    }
                     break;
                 case 2:
                     display_page = 1; // Placeholder para não ir para tela inexistente
