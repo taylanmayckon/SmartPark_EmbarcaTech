@@ -68,7 +68,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 display_mode = !display_mode; // Troca o modo de visualização
                 display_page = 0; // Vai para a primeira tela do display
                 break;
-                
+
             case BUTTON_A:
                 display_page--; // Decrementa, navegando para a tela anterior
                 if(display_page<0){
@@ -287,11 +287,13 @@ void customer_select_spot_time(uint16_t y_value){
     ssd1306_draw_string(&ssd, converted_string, 35+40, 14, false); // Imprime o número da vaga
 
     // Imprimindo o tempo
+    ssd1306_draw_char(&ssd, '>', 59, 28, false); // Simbolo para cima
     int_2_string(minutos); // Convertendo os minutos em string
-    ssd1306_draw_string(&ssd, converted_string, 35, 26, false); // Imprimindo no display
-    ssd1306_draw_char(&ssd, ':', 35+16, 26, false); // Imprime a divisória do tempo
+    ssd1306_draw_string(&ssd, converted_string, 43, 37, false); // Imprimindo no display
+    ssd1306_draw_char(&ssd, ':', 43+16, 37, false); // Imprime a divisória do tempo
     int_2_string(segundos); // Convertendo os segundos em string
-    ssd1306_draw_string(&ssd, converted_string, 35+24, 26, false);
+    ssd1306_draw_string(&ssd, converted_string, 43+24, 37, false);
+    ssd1306_draw_char(&ssd, '<', 59, 46, false); // Símbolo para baixo
 
 }
 
