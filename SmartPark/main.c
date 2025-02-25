@@ -246,10 +246,7 @@ void customer_busy_spot_func(){
     ssd1306_draw_string(&ssd, "VAGA OCUPADA", 16, 22, true);
     ssd1306_draw_string(&ssd, "PARA VOLTAR", 20, 32, true);
     ssd1306_draw_string(&ssd, "PRESSIONE B", 20, 42, true);
-
 }
-
-
 
 int main(){
     stdio_init_all();
@@ -317,7 +314,7 @@ int main(){
                 case 1: // Tela de seleção de vaga
                     customer_select_spot(vrx_value, vry_value);
                     if(busy_spot_popup){ // Ativa o popup informativo caso tente selecionar uma vaga ocupada
-                        customer_busy_spot_func();
+                        customer_busy_spot_func(&ssd);
                     }
                     break;
                 case 2:

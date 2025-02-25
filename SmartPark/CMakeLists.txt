@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(SmartPark main.c libs/ssd1306.c)
+add_executable(SmartPark main.c libs/ssd1306.c )
 
 pico_set_program_name(SmartPark "SmartPark")
 pico_set_program_version(SmartPark "0.1")
