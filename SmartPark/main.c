@@ -37,6 +37,9 @@ char converted_string[3]; // String que armazena o número convertido, no format
 
 bool busy_spot_popup = false; // Booleano para controlar o popup caso a vaga do cliente esteja ocupada na tela de seleção
 
+uint32_t customer_selected_spot_time = 0; // Variável para armazenar o tempo desejado para a vaga (formato em us)
+uint32_t customer_selected_spot_delay = 0; // Variável para controlar a velocidade das entradas
+
 // Variáveis para o controle da interrupção
 uint32_t last_interrupt_time = 0; // Controla o debounce da interrupção
 int display_page = 0; // Controla que página será exibida
@@ -65,12 +68,14 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 display_mode = !display_mode; // Troca o modo de visualização
                 display_page = 0; // Vai para a primeira tela do display
                 break;
+                
             case BUTTON_A:
                 display_page--; // Decrementa, navegando para a tela anterior
                 if(display_page<0){
                     display_page=0; // Impede que vá para uma tela inválida
                 }
                 break;
+
             case BUTTON_B:
                 if(busy_spot_popup){ // Condição para desativar o popup
                     busy_spot_popup = false;
@@ -80,6 +85,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                     busy_spot_popup = true; // Para ativar o popup de tela ocupada
                 }
                 else{ // Se não for nenhum dos casos acima, ele mantém o fluxo e passa para a próxima tela
+                    customer_selected_spot_time = 0; // Zera o tempo a ser exibido na seleção
                     display_page++; // Incrementa, navegando para a próxima tela
                     if (display_mode && display_page>3){ // Se tiver na tela do cliente, página acima de 3
                         display_page=3; // Força para que mantenha a tela 3
@@ -134,6 +140,24 @@ void customer_standby(){
 // Função que converte int para char
 void int_2_char(int num, char *out){
     *out = '0' + num;
+}
+
+void int_2_string(int num){
+    if(num<9){ // Gera string para as menores que 10
+        int_2_char(num, &converted_num); // Converte o dígito à direita do número para char
+        converted_string[0] = '0'; // Char para melhorar o visual
+        converted_string[1] = converted_num; // Int convertido para char
+        converted_string[2] = '\0'; // Terminador nulo da String 
+    }
+    else{ // Gera a string para as maiores/iguais que 10
+        int divider = num/10; // Obtém as dezenas
+        int_2_char(divider, &converted_num);
+        converted_string[0] = converted_num;
+
+        int_2_char(num%10, &converted_num); // Obtém a parte das unidades
+        converted_string[1] = converted_num; // Int convertido para char
+        converted_string[2] = '\0'; // Terminador nulo da String
+    }
 }
 
 // Função para seleção de vaga por parte do usuário
@@ -211,27 +235,10 @@ void customer_select_spot(uint16_t x_value, uint16_t y_value){
             customer_spot_select_info_bool = false; // Se não, mantém o estado padrão
         }
 
-        if(i<9){ // Gera string para as menores que 10
-            int_2_char(i+1, &converted_num); // Converte o dígito à direita do número para char
-            converted_string[0] = '0'; // Char para melhorar o visual
-            converted_string[1] = converted_num; // Int convertido para char
-            converted_string[2] = '\0'; // Terminador nulo da String
-            ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool);
-        }
-        else if(i<19){ // Gera string para as menores que 20 e maiores que 10
-            int_2_char(i-9, &converted_num); // Converte o dígito à direita do número para char
-            converted_string[0] = '1'; // Char para melhorar o visual
-            converted_string[1] = converted_num; // Int convertido para char
-            converted_string[2] = '\0'; // Terminador nulo da String
-            ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool);
-        }
-        else{ // Gera a string para as maiores que 20
-            int_2_char(i-19, &converted_num); // Converte o dígito à direita do número para char
-            converted_string[0] = '2'; // Char para melhorar o visual
-            converted_string[1] = converted_num; // Int convertido para char
-            converted_string[2] = '\0'; // Terminador nulo da String
-            ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool);
-        }
+        int_2_string(i+1); // Converte o número da vaga em uma string, que fica na variável global "converted_string"
+
+        // Escreve o número da vaga atual
+        ssd1306_draw_string(&ssd, converted_string, 8+(16*customer_spot_select_spacer_value)+(8*customer_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), customer_spot_select_info_bool); 
 
         customer_spot_select_spacer_value++; // Incrementa o spacer para separar as vagas no display
     }
@@ -247,6 +254,47 @@ void customer_busy_spot_func(){
     ssd1306_draw_string(&ssd, "PARA VOLTAR", 20, 32, true);
     ssd1306_draw_string(&ssd, "PRESSIONE B", 20, 42, true);
 }
+
+
+// Função que seleciona o tempo para a vaga desejada
+void customer_select_spot_time(uint16_t y_value){
+    uint32_t current_time = to_us_since_boot(get_absolute_time()); // Pegando o tempo de execução atual do código
+
+    if(current_time-customer_selected_spot_delay > 100000){ // Só vai incrementar tempo a cada 100ms
+        customer_selected_spot_delay = current_time; // Atualiza quando foi a ultima ação
+        if(y_value>3000){ // Joystick para cima
+            customer_selected_spot_time+=5000000; // Incrementa 5 segundos (mas no formato de us)
+        } else if(y_value<1000){ // Joystick para baixo
+            if(customer_selected_spot_time<5000001){ // Condição para não ocorrer um bug com valores negativos
+                customer_selected_spot_time=0; // Nesse caso, só zera o valor do tempo
+            }
+            else{
+                customer_selected_spot_time-=5000000; // Decrementa 5 segundos (mas no formato de us)
+            }
+        }
+    }
+    
+    // Calculando os valores no formato minuto:segundo
+    int minutos = customer_selected_spot_time/60000000; // Calcula a quantidade de minutos 
+    int segundos = (customer_selected_spot_time%60000000) / 1000000; // Calcula a quantidade de segundos
+    printf("%d:%d\n", minutos, segundos);
+
+    ssd1306_rect(&ssd, 0, 0, 127, 11, cor, cor); // Barra superior
+    ssd1306_draw_string(&ssd, "Tempo de Vaga", 11, 2, true); // Texto superior
+    // Imprimindo informações sobre a vaga
+    ssd1306_draw_string(&ssd, "VAGA", 35, 14, false); 
+    int_2_string(customer_spot_select_spotview_value); // Convertendo o valor da vaga atual para uma string
+    ssd1306_draw_string(&ssd, converted_string, 35+40, 14, false); // Imprime o número da vaga
+
+    // Imprimindo o tempo
+    int_2_string(minutos); // Convertendo os minutos em string
+    ssd1306_draw_string(&ssd, converted_string, 35, 26, false); // Imprimindo no display
+    ssd1306_draw_char(&ssd, ':', 35+16, 26, false); // Imprime a divisória do tempo
+    int_2_string(segundos); // Convertendo os segundos em string
+    ssd1306_draw_string(&ssd, converted_string, 35+24, 26, false);
+
+}
+
 
 int main(){
     stdio_init_all();
@@ -314,11 +362,11 @@ int main(){
                 case 1: // Tela de seleção de vaga
                     customer_select_spot(vrx_value, vry_value);
                     if(busy_spot_popup){ // Ativa o popup informativo caso tente selecionar uma vaga ocupada
-                        customer_busy_spot_func(&ssd);
+                        customer_busy_spot_func();
                     }
                     break;
                 case 2:
-                    display_page = 1; // Placeholder para não ir para tela inexistente
+                    customer_select_spot_time(vry_value); // Função para selecionar o tempo de reserva da vaga
                     break;
             }
         }
