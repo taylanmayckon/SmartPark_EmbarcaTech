@@ -89,9 +89,14 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 break;
 
             case BUTTON_A:
-                display_page--; // Decrementa, navegando para a tela anterior
                 if(display_page<0){
                     display_page=0; // Impede que vá para uma tela inválida
+                }
+                else if(display_mode && display_page==3){ // Para não ter como voltar pra tela anterior depois de confirmar
+                    display_page = 0;
+                }
+                else{
+                    display_page--; // Decrementa, navegando para a tela anterior 
                 }
                 break;
 
@@ -115,7 +120,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                     customer_selected_spot_time = 0; // Zera o tempo a ser exibido na seleção
                     display_page++; // Incrementa, navegando para a próxima tela
                     if (display_mode && display_page>3){ // Se tiver na tela do cliente, página acima de 3
-                        display_page=3; // Força para que mantenha a tela 3
+                        display_page=0; // Força para que mantenha a tela 3
                     }
                     if (!display_mode && display_page>3){ // Se tiver na tela do proprietário, página acima de 3
                         display_page=3; // Força para que mantenha a tela 3
@@ -326,7 +331,11 @@ void customer_select_spot_time(uint16_t y_value){
 
 // Função para a tela de confirmação da vaga
 void customer_confirmation_view(){
-
+    ssd1306_rect(&ssd, 0, 0, 127, 11, cor, cor); // Borda
+    ssd1306_draw_string(&ssd, "SmartPark", 28, 2, true); // Logo em negativo
+    ssd1306_draw_string(&ssd, "Confirmado!", 19, 18, false);  // Linha 1
+    ssd1306_draw_string(&ssd, "Pressione B", 19, 32, false); // Linha 2
+    ssd1306_draw_string(&ssd, "Para sair", 27, 46, false); // Linha 3
 }
 
 
