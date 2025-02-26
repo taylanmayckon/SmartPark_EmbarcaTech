@@ -21,6 +21,8 @@ bool cor = true; // Booleano que indica a cor branca do pixel
 #define JOYSTICK_X 27
 #define JOYSTICK_Y 26
 #define JOYSTICK_BUTTON 22
+// Valores do joystick declarados globalmente
+uint16_t vrx_value, vry_value;
 // Definições dos botões
 #define BUTTON_A 5
 #define BUTTON_B 6
@@ -128,6 +130,27 @@ bool repeating_timer_callback(struct repeating_timer *t){
             spots_input[i] = 0; // Zera o input
         }
     }
+
+    // Enviando via USB
+    // Normalizando valores
+    float x_normal, y_normal;
+    if(vrx_value>2048){
+        x_normal = (float)(vrx_value-2048)/2048;
+    }
+    else{
+        x_normal = (float)(2048-vrx_value)/2048;
+    }
+    if(vry_value>2048){
+        y_normal = (float)(vry_value-2048)/2048;
+    }
+    else{
+        y_normal = (float)(2048-vry_value)/2048;
+    }
+
+    for(int i=0; i<25; i++){
+        printf("%d;", spots_state[i]);
+    }
+    printf("%.2f;%.2f\n", x_normal, y_normal);
 
     return true;
 }
@@ -540,8 +563,7 @@ void owner_luminosity_level(uint x_value, uint y_value){
     ssd1306_rect(&ssd, 52-8-3, 56-3, 60, 12, cor, cor); // Fundo branco
     ssd1306_draw_string(&ssd, "Andar 1", 56, 52-8, true); // Nome andar
     ssd1306_rect(&ssd, 52, 13, 60+40, 8, cor, !cor); // Frame vazio (a ser preenchido)
-    ssd1306_rect(&ssd, 52, 13, (uint8_t)(100*y_normal), 8, cor, cor); // Preenchimento dinamico
-    printf("%f | %d\n", x_normal, x_value);
+    ssd1306_rect(&ssd, 52, 13, 100*y_normal, 8, cor, cor); // Preenchimento dinamico
 }
 
 // Função de ajuste da luminosidade
@@ -615,10 +637,10 @@ int main(){
         // Leituras do ADC
         // Leitura do Eixo X (Canal 1)
         adc_select_input(1);
-        uint16_t vrx_value = adc_read();
+        vrx_value = adc_read();
         // Leitura do Eixo Y (Canal 0)
         adc_select_input(0);
-        uint16_t vry_value = adc_read();
+        vry_value = adc_read();
         // Deadzone para os joysticks
         if (vrx_value>=1900 && vrx_value<=2194){
             vrx_value=2048;
