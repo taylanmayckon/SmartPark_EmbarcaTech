@@ -511,10 +511,37 @@ void owner_expand_info(){
 
 // Função da tela de luminosidade
 void owner_luminosity_level(uint x_value, uint y_value){
+    float x_normal, y_normal;
+
+    // Normalizando valores
+    if(x_value>2048){
+        x_normal = (float)(x_value-2048)/2048;
+    }
+    else{
+        x_normal = (float)(2048-x_value)/2048;
+    }
+    if(y_value>2048){
+        y_normal = (float)(y_value-2048)/2048;
+    }
+    else{
+        y_normal = (float)(2048-y_value)/2048;
+    }
+
     ssd1306_rect(&ssd, 0, 0, 127, 11, cor, cor); // Borda
     ssd1306_draw_string(&ssd, "Luminosidade", 15, 2, true); // Logo em negativo
 
+    // Andar 0
+    ssd1306_rect(&ssd, 12, 13, 60, 12, cor, cor); // Fundo branco
+    ssd1306_draw_string(&ssd, "Andar 0", 16, 16, true); // Nome andar
+    ssd1306_rect(&ssd, 12+12, 13, 60+40, 8, cor, !cor); // Frame vazio (a ser preenchido)
+    ssd1306_rect(&ssd, 12+12, 13, 100*x_normal, 8, cor, cor); // Preenchimento dinamico
 
+    // Andar 1
+    ssd1306_rect(&ssd, 52-8-3, 56-3, 60, 12, cor, cor); // Fundo branco
+    ssd1306_draw_string(&ssd, "Andar 1", 56, 52-8, true); // Nome andar
+    ssd1306_rect(&ssd, 52, 13, 60+40, 8, cor, !cor); // Frame vazio (a ser preenchido)
+    ssd1306_rect(&ssd, 52, 13, (uint8_t)(100*y_normal), 8, cor, cor); // Preenchimento dinamico
+    printf("%f | %d\n", x_normal, x_value);
 }
 
 // Função de ajuste da luminosidade
