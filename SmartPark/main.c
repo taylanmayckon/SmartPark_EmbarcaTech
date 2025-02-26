@@ -44,6 +44,15 @@ bool busy_spot_popup = false; // Booleano para controlar o popup caso a vaga do 
 uint32_t customer_selected_spot_time = 0; // Variável para armazenar o tempo desejado para a vaga (formato em us)
 uint32_t customer_selected_spot_delay = 0; // Variável para controlar a velocidade das entradas
 
+
+// Variáveis para controle visual do display dos proprietários
+uint32_t owner_spot_select_info_time = 0; // Controla o tempo de alternar a mensagem superior na seleção de vagas
+uint32_t owner_spot_select_spotview_time = 0; // Variável para controlar o tempo de alternagem entre as vagas no display
+bool owner_spot_select_info_bool = false; // Variável para alterar visualização da vaga a ser selecionada
+bool owner_spot_select_upper_info_bool = false;
+int owner_spot_select_spotview_value = 0; // Variável que controla a navegação do proprietário entre as vagas
+int owner_spot_select_spacer_value = 0; // Controla o espaçamento entre o numero das vagas no display
+
 // Variáveis para o controle da interrupção
 uint32_t last_interrupt_time = 0; // Controla o debounce da interrupção
 int display_page = 0; // Controla que página será exibida
@@ -124,27 +133,33 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 break;
 
             case BUTTON_B:
-                if(busy_spot_popup){ // Condição para desativar o popup
-                    busy_spot_popup = false;
-                }
-                else if(display_page==1 && display_mode && spots_state[customer_spot_select_spotview_value] && !busy_spot_popup){ // Condição para ativar popup
-                    // Tem que estar na tela de seleção, no display dos clientes, com uma vaga selecionada no estado ocupado e o popup inicialmente tem que estar desativado
-                    busy_spot_popup = true; // Para ativar o popup de tela ocupada
-                }
-                else if(display_page==2 && !spots_state[customer_spot_select_spotview_value]){ // Caso esteja na página 2, selecionado uma vaga vazia (bool = false)
-                    display_page++; // Vai para a última tela
-                    spots_state[customer_spot_select_spotview_value] = 1; // Marca a vaga como ocupada
-                    spots_time[customer_spot_select_spotview_value] = current_time; // Armazena quando foi reservada a vaga
-                    spots_input[customer_spot_select_spotview_value] = customer_selected_spot_time; // Salva o tempo de reserva em us
-                }
-                else{ // Se não for nenhum dos casos acima, ele mantém o fluxo e passa para a próxima tela
-                    customer_selected_spot_time = 0; // Zera o tempo a ser exibido na seleção
-                    display_page++; // Incrementa, navegando para a próxima tela
-                    if (display_mode && display_page>3){ // Se tiver na tela do cliente, página acima de 3
-                        display_page=0; // Força para que mantenha a tela 3
+                if(display_mode){ // Tratamento das telas de clientes
+                    if(busy_spot_popup){ // Condição para desativar o popup
+                        busy_spot_popup = false;
                     }
-                    if (!display_mode && display_page>3){ // Se tiver na tela do proprietário, página acima de 3
-                        display_page=3; // Força para que mantenha a tela 3
+                    else if(display_page==1 && spots_state[customer_spot_select_spotview_value] && !busy_spot_popup){ // Condição para ativar popup
+                        // Tem que estar na tela de seleção, no display dos clientes, com uma vaga selecionada no estado ocupado e o popup inicialmente tem que estar desativado
+                        busy_spot_popup = true; // Para ativar o popup de tela ocupada
+                    }
+                    else if(display_page==2 && !spots_state[customer_spot_select_spotview_value]){ // Caso esteja na página 2, selecionado uma vaga vazia (bool = false)
+                        display_page++; // Vai para a última tela
+                        spots_state[customer_spot_select_spotview_value] = 1; // Marca a vaga como ocupada
+                        spots_time[customer_spot_select_spotview_value] = current_time; // Armazena quando foi reservada a vaga
+                        spots_input[customer_spot_select_spotview_value] = customer_selected_spot_time; // Salva o tempo de reserva em us
+                    }
+                    else{ // Se não for nenhum dos casos acima, ele mantém o fluxo e passa para a próxima tela
+                        customer_selected_spot_time = 0; // Zera o tempo a ser exibido na seleção
+                        display_page++; // Incrementa, navegando para a próxima tela
+                        if (display_page>3){ // Se tiver na tela do cliente, página acima de 3
+                            display_page=0; // Força para que mantenha a tela 3
+                        }
+                    }
+                }
+                else{ // Tratamento das telas de funcionários
+                    display_page++;
+
+                    if(display_page>1){ // Forçando a volta para tela inicial se for além das disponíveis
+                        display_page=0;
                     }
                 }
                 break;
@@ -161,6 +176,7 @@ void generate_border(){
     ssd1306_rect(&ssd, 0, 125, 2, 63, cor, cor); // Borda direita, largura=2
 }
 
+/////////////////////////////////////////////////////// FUNÇÕES DO CLIENTE ///////////////////////////////////////////////////////
 // Função para o standby do usuário
 void customer_standby(){
     uint32_t current_time = to_us_since_boot(get_absolute_time());
@@ -359,6 +375,80 @@ void customer_confirmation_view(){
 }
 
 
+/////////////////////////////////////////////////////// FUNÇÕES DO PROPRIETÁRIO ///////////////////////////////////////////////////////
+// Função para a tela das vagas para o proprietário
+void owner_select_spot(uint16_t x_value, uint16_t y_value){
+    ssd1306_rect(&ssd, 0, 0, 127, 11, cor, cor); // Borda superior
+
+    uint32_t current_time = to_us_since_boot(get_absolute_time()); // Pega o tempo de execução atual
+
+    // Controla a informação superior a ser exibida
+    if(current_time - owner_spot_select_info_time > 4000000){
+        owner_spot_select_info_time = current_time; 
+        owner_spot_select_upper_info_bool = !owner_spot_select_upper_info_bool;
+    }
+
+    if(owner_spot_select_upper_info_bool){
+        ssd1306_draw_string(&ssd, "Confirme com A", 7, 2, true); // Texto superior em negativo
+    }
+    else{
+        ssd1306_draw_string(&ssd, "Alterne com B", 11, 2, true); // Texto superior em negativo
+    }
+    
+    // Controle de tempo para a navegação do display
+    if(current_time - owner_spot_select_spotview_time > 200000){ // 200ms de intervalo
+        owner_spot_select_spotview_time = current_time; // Atualiza o tempo
+
+        // Navegação esquerda-direita
+        if(x_value>3000){ // Joystick para a direita
+            owner_spot_select_spotview_value++; // Altera para a vaga da direita (+1)
+        } else if(x_value<1000){ // Joystick para a esquerda
+            owner_spot_select_spotview_value--; // Altera para a vaga da esquerda (-1)
+        }
+
+        if(y_value>3000){ // Joystick para cima
+            owner_spot_select_spotview_value-=5; // Altera para a vaga de cima (-5)
+        } else if(y_value<1000){ // Joystick para baixo
+            owner_spot_select_spotview_value+=5; // Altera para a vaga de baixo (+5)
+        }
+
+        // Condicionais para não ultrapassar o limite de vags
+        if(owner_spot_select_spotview_value<0){ // Se tentar menor que 0, joga para a última
+            owner_spot_select_spotview_value=24;
+        }
+        else if(owner_spot_select_spotview_value>24){ // Se tentar maior que 24, joga para a primeira
+            owner_spot_select_spotview_value=0;
+        }
+    }
+
+
+    int line_select = 0; // Variável que aponta para a linha de vagas a ser escrita (zerada antes de cada loop for a seguir)
+    // Visualização de todas as vagas possíveis no display
+    for(int i=0; i<25; i++){
+        if(i%5==0){ // Troca a linha quando ultrapassar 5 iterações e reseta o spacer das vagas
+            line_select++; // Alterna as linhas, por meio de incremento dessa variável
+            owner_spot_select_spacer_value = 0; // Para alternar o espaçamento necessário entre as vagas da linha
+        }
+
+        // Tratamento do visual da vaga selecionada
+        if (i == owner_spot_select_spotview_value){ // Se a iteração atual for a vaga selecionada
+            owner_spot_select_info_bool = true; // Vai realizar a inversão da fonte do numero da vaga
+            ssd1306_rect(&ssd, 4+(8*line_select)+(1*line_select), 5+(16*owner_spot_select_spacer_value)+(8*owner_spot_select_spacer_value), 19, 9, cor, cor); // Gera o branco da vaga selecionada
+        }
+        else{
+            owner_spot_select_info_bool = false; // Se não, mantém o estado padrão
+        }
+
+        int_2_string(i+1); // Converte o número da vaga em uma string, que fica na variável global "converted_string"
+
+        // Escreve o número da vaga atual
+        ssd1306_draw_string(&ssd, converted_string, 8+(16*owner_spot_select_spacer_value)+(8*owner_spot_select_spacer_value), 5+(8*line_select)+(1*line_select), owner_spot_select_info_bool); 
+
+        owner_spot_select_spacer_value++; // Incrementa o spacer para separar as vagas no display
+    }
+}
+
+
 int main(){
     stdio_init_all();
 
@@ -447,6 +537,15 @@ int main(){
                     break;
                 case 3:
                     customer_confirmation_view();
+                    break;
+            }
+        }
+        else{ // false = Tela do proprietário
+            switch(display_page){
+                case 0: // Tela de seleção de vagas
+                    owner_select_spot(vrx_value, vry_value);
+                    break;
+                case 1:
                     break;
             }
         }
