@@ -54,7 +54,8 @@ target_link_libraries(SmartPark
         hardware_pwm
         hardware_i2c
         hardware_pio
-        hardware_clocks)
+        hardware_clocks
+        hardware_pwm)
 
 # Add the standard include files to the build
 target_include_directories(SmartPark PRIVATE

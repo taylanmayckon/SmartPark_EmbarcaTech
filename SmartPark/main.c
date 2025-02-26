@@ -8,6 +8,7 @@
 #include "libs/font.h"
 #include "libs/ssd1306.h"
 #include "libs/led_matrix.h"
+#include "hardware/pwm.h"
 
 // Definições para o I2C e display 
 #define I2C_PORT i2c1
@@ -60,13 +61,6 @@ uint32_t last_interrupt_time = 0; // Controla o debounce da interrupção
 int display_page = 0; // Controla que página será exibida
 bool display_mode = true; // Controla o modo de visualização (cliente ou proprietário)
 
-// Variáveis da PIO declaradas no escopo global
-PIO pio;
-uint sm;
-// Constantes para a matriz de leds
-#define IS_RGBW false
-#define LED_MATRIX_PIN 7
-
 // Vetor indicativo do estado das vagas
 bool spots_state[25] = {
     0, 0, 0, 0, 0,
@@ -93,6 +87,35 @@ uint32_t spots_input[25] = {
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
 };
+
+// Variáveis da PIO declaradas no escopo global
+PIO pio;
+uint sm;
+// Constantes para a matriz de leds
+#define IS_RGBW false
+#define LED_MATRIX_PIN 7
+
+// Variáveis para o PWM
+uint wrap = 2048; // Valor do TOP
+uint di = 2; // Divisor inteiro
+// Equivale a 30,5 kHz
+#define LED_RED 13
+#define LED_GREEN 11
+#define OUTPUT_MASK ((1 << LED_RED) | (1 << LED_GREEN))
+uint red_pwm_slice, green_pwm_slice;
+
+
+// Função para configurar o PWM
+uint config_pwm(uint gpio){
+    gpio_set_function(gpio, GPIO_FUNC_PWM); // Habilitando o pino como pwm
+    uint slice = pwm_gpio_to_slice_num(gpio); // Obtendo o canal (slice) do PWM 
+    pwm_set_clkdiv(slice, di); // Definindo o divisor de clock do PWM
+    pwm_set_wrap(slice, wrap); // Definindo o valor de wrap (contador do PWM)
+    pwm_set_gpio_level(gpio, 0); // Iniciando com 0% de duty cycle
+    pwm_set_enabled(slice, true); // Habilitando o pwm no slice correspondente
+
+    return slice;
+}
 
 
 // Função periódica para verificar a liberação das vagas e enviar dados via USB
@@ -486,6 +509,23 @@ void owner_expand_info(){
     ssd1306_draw_string(&ssd, "PRESSIONE A", 20, 42, true); // Linha 3
 }
 
+// Função da tela de luminosidade
+void owner_luminosity_level(uint x_value, uint y_value){
+    ssd1306_rect(&ssd, 0, 0, 127, 11, cor, cor); // Borda
+    ssd1306_draw_string(&ssd, "Luminosidade", 15, 2, true); // Logo em negativo
+
+
+}
+
+// Função de ajuste da luminosidade
+void change_led_luminosity(uint gpio, uint joy_value){
+    if(joy_value>2048){ // Analógico do meio para cima
+        pwm_set_gpio_level(gpio, joy_value-2048); 
+    }
+    else{ // Analógico do meio para baixo
+        pwm_set_gpio_level(gpio, 2048-joy_value); 
+    }
+}
 
 int main(){
     stdio_init_all();
@@ -535,6 +575,15 @@ int main(){
     uint offset = pio_add_program(pio, &ws2812_program);
     ws2812_program_init(pio, sm, offset, LED_MATRIX_PIN, 800000, IS_RGBW);
 
+    // Configurando PWM
+    gpio_init_mask(OUTPUT_MASK);
+    gpio_set_dir_out_masked(OUTPUT_MASK);
+    gpio_clr_mask(OUTPUT_MASK);
+    red_pwm_slice = config_pwm(LED_RED);
+    green_pwm_slice = config_pwm(LED_GREEN);
+
+    
+
     while (true) {
         // Leituras do ADC
         // Leitura do Eixo X (Canal 1)
@@ -560,6 +609,9 @@ int main(){
         generate_border(); // Gera a borda com largura de 2 pixels
 
         if(display_mode){ // true = Tela do cliente
+            // Zerando o PWM dos leds
+            pwm_set_gpio_level(LED_GREEN, 0); 
+            pwm_set_gpio_level(LED_RED, 0);
             switch(display_page){
                 case 0: // Tela de standby, aguardando interação
                     customer_standby();
@@ -581,12 +633,21 @@ int main(){
         else{ // false = Tela do proprietário
             switch(display_page){
                 case 0: // Tela de seleção de vagas
+                    // Zerando o PWM dos leds
+                    pwm_set_gpio_level(LED_GREEN, 0); 
+                    pwm_set_gpio_level(LED_RED, 0);
                     owner_select_spot(vrx_value, vry_value);
                     if(popup_expand_info){ // Ativa o popup caso seja selecionada a vaga
                         owner_expand_info();
                     }
                     break;
                 case 1:
+                    // (Eixo Y - Verde) Led equivalente ao andar 0
+                    change_led_luminosity(LED_GREEN, vrx_value);
+                    // (Eixo X - Vermelho) Led equivalente ao andar 1
+                    change_led_luminosity(LED_RED, vry_value);
+
+                    owner_luminosity_level(vrx_value, vry_value);
                     break;
             }
         }
