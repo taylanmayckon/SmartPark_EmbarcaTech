@@ -52,11 +52,30 @@ bool spots_state[25] = {
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
 };
 
+// Vetor para armazenar quando foi reservada cada vaga
+uint32_t spots_time[25] = {
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+};
 
+absolute_time_t free_spot_time; // Variável para armazenar o tempo de liberação da vaga
 
-// Função de tratamento de interrupções
+// Função para liberar a vaga depois de um dado tempo
+int64_t free_spot_callback(alarm_id_t id, void *user_data){
+    int *spot_value = (int *)user_data; // Convertendo o ponteiro referente à vaga para int*
+    spots_state[*spot_value] = 0; // Marca como vaga livre
+    spots_time[*spot_value] = 0; // Zera o tempo reservado para a mesma
+
+    return false; // Para não reagendar o alarme
+}
+
+// Função de tratamento de interrupções da GPIO
 void gpio_irq_handler(uint gpio, uint32_t events){
     // Tratamento do debounce
     uint32_t current_time = to_us_since_boot(get_absolute_time()); // Obtendo o tempo atual
@@ -83,6 +102,14 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 else if(display_page==1 && display_mode && spots_state[customer_spot_select_spotview_value] && !busy_spot_popup){ // Condição para ativar popup
                     // Tem que estar na tela de seleção, no display dos clientes, com uma vaga selecionada no estado ocupado e o popup inicialmente tem que estar desativado
                     busy_spot_popup = true; // Para ativar o popup de tela ocupada
+                }
+                else if(display_page==2 && !spots_state[customer_spot_select_spotview_value]){ // Caso esteja na página 2, selecionado uma vaga vazia (bool = false)
+                    display_page++; // Vai para a última tela
+                    spots_state[customer_spot_select_spotview_value] = 1; // Marca a vaga como ocupada
+                    spots_time[customer_spot_select_spotview_value] = customer_selected_spot_time; // Armazena quando foi reservada a vaga
+                    uint32_t alarm_time = customer_selected_spot_time/1000; // Tempo em milissegundos do agendamento
+                    add_alarm_in_ms(alarm_time, free_spot_callback, &customer_spot_select_spotview_value, false); // Agenda o alarme para resetar a vaga quando o período de ocupação acabar
+                    // No caso a função de cima também passa a variável referente ao número da vaga (customer_spot_select_spotview_value)
                 }
                 else{ // Se não for nenhum dos casos acima, ele mantém o fluxo e passa para a próxima tela
                     customer_selected_spot_time = 0; // Zera o tempo a ser exibido na seleção
@@ -283,7 +310,7 @@ void customer_select_spot_time(uint16_t y_value){
     ssd1306_draw_string(&ssd, "Tempo de Vaga", 11, 2, true); // Texto superior
     // Imprimindo informações sobre a vaga
     ssd1306_draw_string(&ssd, "VAGA", 35, 14, false); 
-    int_2_string(customer_spot_select_spotview_value); // Convertendo o valor da vaga atual para uma string
+    int_2_string(customer_spot_select_spotview_value+1); // Convertendo o valor da vaga atual para uma string
     ssd1306_draw_string(&ssd, converted_string, 35+40, 14, false); // Imprime o número da vaga
 
     // Imprimindo o tempo
@@ -294,6 +321,11 @@ void customer_select_spot_time(uint16_t y_value){
     int_2_string(segundos); // Convertendo os segundos em string
     ssd1306_draw_string(&ssd, converted_string, 43+24, 37, false);
     ssd1306_draw_char(&ssd, '<', 59, 46, false); // Símbolo para baixo
+}
+
+
+// Função para a tela de confirmação da vaga
+void customer_confirmation_view(){
 
 }
 
@@ -369,6 +401,9 @@ int main(){
                     break;
                 case 2:
                     customer_select_spot_time(vry_value); // Função para selecionar o tempo de reserva da vaga
+                    break;
+                case 3:
+                    customer_confirmation_view();
                     break;
             }
         }
