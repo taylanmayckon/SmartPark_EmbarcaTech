@@ -53,6 +53,8 @@ bool owner_spot_select_upper_info_bool = false;
 int owner_spot_select_spotview_value = 0; // Variável que controla a navegação do proprietário entre as vagas
 int owner_spot_select_spacer_value = 0; // Controla o espaçamento entre o numero das vagas no display
 
+bool popup_expand_info = false; // Variável para controlar o popup das informações da vaga
+
 // Variáveis para o controle da interrupção
 uint32_t last_interrupt_time = 0; // Controla o debounce da interrupção
 int display_page = 0; // Controla que página será exibida
@@ -118,17 +120,25 @@ void gpio_irq_handler(uint gpio, uint32_t events){
             case JOYSTICK_BUTTON:
                 display_mode = !display_mode; // Troca o modo de visualização
                 display_page = 0; // Vai para a primeira tela do display
+                popup_expand_info = false; // Desligando popups
+                busy_spot_popup = false; // Desligando popups
                 break;
 
             case BUTTON_A:
-                if(display_page<1){
-                    display_page=0; // Impede que vá para uma tela inválida
+                if(display_mode){ // true = Tela do cliente
+                    if(display_page<1){
+                        display_page=0; // Impede que vá para uma tela inválida
+                    }
+                    else if(display_page==3){ // Para não ter como voltar pra tela anterior depois de confirmar
+                        display_page = 0;
+                    }
+                    else{
+                        display_page--; // Decrementa, navegando para a tela anterior 
+                    }
                 }
-                else if(display_mode && display_page==3){ // Para não ter como voltar pra tela anterior depois de confirmar
-                    display_page = 0;
-                }
-                else{
-                    display_page--; // Decrementa, navegando para a tela anterior 
+                
+                else{ // False = Tela do proprietário
+                    popup_expand_info = !popup_expand_info; // Alterna a visualização do popup
                 }
                 break;
 
@@ -448,6 +458,34 @@ void owner_select_spot(uint16_t x_value, uint16_t y_value){
     }
 }
 
+// Função que ativa o popup das informações da vaga
+void owner_expand_info(){
+    uint32_t current_time = to_us_since_boot(get_absolute_time()); // Pegando o tempo atual
+    
+    int32_t remaining_time = -(current_time - (spots_time[0] + spots_input[0])); // Variável que armazena o tempo restante da vaga
+    int minutos = (remaining_time)/60000000;
+    int segundos = (remaining_time%60000000) / 1000000; // Calcula a quantidade de segundos
+
+    ssd1306_rect(&ssd, 16, 10, 108, 39, cor, !cor);
+    ssd1306_rect(&ssd, 18, 12, 104, 35, cor, cor); // Cria o retangulo do popup
+    ssd1306_draw_string(&ssd, "VAGA", 35, 22, true); // Linha 1
+    int_2_string(owner_spot_select_spotview_value+1); // Convertendo o numero da vaga em uma string
+    ssd1306_draw_string(&ssd, converted_string, 35+(8*4)+8, 22, true); // Linha 1 
+
+    if(spots_input[owner_spot_select_spotview_value] == 0){ // Quando a vaga estiver livre
+        ssd1306_draw_string(&ssd, "DESOCUPADA", 23, 32, true); // Linha 2
+    }
+    else{
+        int_2_string(minutos);
+        ssd1306_draw_string(&ssd, converted_string, 43, 32, true); // Linha 2
+        ssd1306_draw_char(&ssd, ':', 43+16, 32, true); // Linha 2
+        int_2_string(segundos);
+        ssd1306_draw_string(&ssd, converted_string, 43+24, 32, true); // Linha 2
+    }
+
+    ssd1306_draw_string(&ssd, "PRESSIONE A", 20, 42, true); // Linha 3
+}
+
 
 int main(){
     stdio_init_all();
@@ -544,16 +582,17 @@ int main(){
             switch(display_page){
                 case 0: // Tela de seleção de vagas
                     owner_select_spot(vrx_value, vry_value);
+                    if(popup_expand_info){ // Ativa o popup caso seja selecionada a vaga
+                        owner_expand_info();
+                    }
                     break;
                 case 1:
                     break;
             }
         }
 
-
         ssd1306_send_data(&ssd); // Envia os dados para o display, atualizando o mesmo
 
-        //printf("Joystick X: %d | Joystick Y: %d\n", vrx_value, vry_value); // Teste da USB
         sleep_ms(30);
     }
 }
