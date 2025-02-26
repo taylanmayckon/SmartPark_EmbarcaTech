@@ -2,8 +2,12 @@
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "hardware/i2c.h"
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
+#include "hardware/timer.h"
 #include "libs/font.h"
 #include "libs/ssd1306.h"
+#include "libs/led_matrix.h"
 
 // Definições para o I2C e display 
 #define I2C_PORT i2c1
@@ -45,10 +49,16 @@ uint32_t last_interrupt_time = 0; // Controla o debounce da interrupção
 int display_page = 0; // Controla que página será exibida
 bool display_mode = true; // Controla o modo de visualização (cliente ou proprietário)
 
+// Variáveis da PIO declaradas no escopo global
+PIO pio;
+uint sm;
+// Constantes para a matriz de leds
+#define IS_RGBW false
+#define LED_MATRIX_PIN 7
 
 // Vetor indicativo do estado das vagas
 bool spots_state[25] = {
-    1, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
     0, 0, 0, 0, 0,
@@ -64,15 +74,28 @@ uint32_t spots_time[25] = {
     0, 0, 0, 0, 0,
 };
 
-absolute_time_t free_spot_time; // Variável para armazenar o tempo de liberação da vaga
+// Vetor para armazenar quanto tempo quer a reserva
+uint32_t spots_input[25] = {
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0,
+};
 
-// Função para liberar a vaga depois de um dado tempo
-int64_t free_spot_callback(alarm_id_t id, void *user_data){
-    int *spot_value = (int *)user_data; // Convertendo o ponteiro referente à vaga para int*
-    spots_state[*spot_value] = 0; // Marca como vaga livre
-    spots_time[*spot_value] = 0; // Zera o tempo reservado para a mesma
 
-    return false; // Para não reagendar o alarme
+// Função periódica para verificar a liberação das vagas e enviar dados via USB
+bool repeating_timer_callback(struct repeating_timer *t){
+    uint32_t current_time = to_us_since_boot(get_absolute_time()); // Obtendo o tempo atual
+    for(int i=0; i<25; i++){ // Para varrer as 25 vagas
+        if((int32_t)(current_time-spots_time[i]) > spots_input[i]){ // Se detectar que o tempo de reserva passou
+            spots_state[i] = 0; // Marca como vaga livre
+            spots_time[i] = 0; // Zera o tempo reservado para a mesma
+            spots_input[i] = 0; // Zera o input
+        }
+    }
+
+    return true;
 }
 
 // Função de tratamento de interrupções da GPIO
@@ -89,7 +112,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 break;
 
             case BUTTON_A:
-                if(display_page<0){
+                if(display_page<1){
                     display_page=0; // Impede que vá para uma tela inválida
                 }
                 else if(display_mode && display_page==3){ // Para não ter como voltar pra tela anterior depois de confirmar
@@ -111,10 +134,8 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 else if(display_page==2 && !spots_state[customer_spot_select_spotview_value]){ // Caso esteja na página 2, selecionado uma vaga vazia (bool = false)
                     display_page++; // Vai para a última tela
                     spots_state[customer_spot_select_spotview_value] = 1; // Marca a vaga como ocupada
-                    spots_time[customer_spot_select_spotview_value] = customer_selected_spot_time; // Armazena quando foi reservada a vaga
-                    uint32_t alarm_time = customer_selected_spot_time/1000; // Tempo em milissegundos do agendamento
-                    add_alarm_in_ms(alarm_time, free_spot_callback, &customer_spot_select_spotview_value, false); // Agenda o alarme para resetar a vaga quando o período de ocupação acabar
-                    // No caso a função de cima também passa a variável referente ao número da vaga (customer_spot_select_spotview_value)
+                    spots_time[customer_spot_select_spotview_value] = current_time; // Armazena quando foi reservada a vaga
+                    spots_input[customer_spot_select_spotview_value] = customer_selected_spot_time; // Salva o tempo de reserva em us
                 }
                 else{ // Se não for nenhum dos casos acima, ele mantém o fluxo e passa para a próxima tela
                     customer_selected_spot_time = 0; // Zera o tempo a ser exibido na seleção
@@ -309,7 +330,6 @@ void customer_select_spot_time(uint16_t y_value){
     // Calculando os valores no formato minuto:segundo
     int minutos = customer_selected_spot_time/60000000; // Calcula a quantidade de minutos 
     int segundos = (customer_selected_spot_time%60000000) / 1000000; // Calcula a quantidade de segundos
-    printf("%d:%d\n", minutos, segundos);
 
     ssd1306_rect(&ssd, 0, 0, 127, 11, cor, cor); // Barra superior
     ssd1306_draw_string(&ssd, "Tempo de Vaga", 11, 2, true); // Texto superior
@@ -376,6 +396,17 @@ int main(){
     gpio_set_irq_enabled_with_callback(BUTTON_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(JOYSTICK_BUTTON, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
+    // Configurando um temporizador de repetição, para liberar as vagas e enviar dados via USB
+    struct repeating_timer timer;
+    // Configurnado o repeating timer
+    add_repeating_timer_ms(500, repeating_timer_callback, NULL, &timer); // Configurada para repetir a cada 500ms
+
+    // Inicializando a PIO
+    pio = pio0;
+    sm = 0;
+    uint offset = pio_add_program(pio, &ws2812_program);
+    ws2812_program_init(pio, sm, offset, LED_MATRIX_PIN, 800000, IS_RGBW);
+
     while (true) {
         // Leituras do ADC
         // Leitura do Eixo X (Canal 1)
@@ -392,7 +423,10 @@ int main(){
             vry_value=2048;
         }
 
+        // Atualiza a matriz de leds endereçáveis
+        atualiza_vagas(spots_state);
 
+        // Gerenciamento do display
         ssd1306_fill(&ssd, false); // Limpa o display
 
         generate_border(); // Gera a borda com largura de 2 pixels

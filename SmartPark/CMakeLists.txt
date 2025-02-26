@@ -35,10 +35,13 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(SmartPark main.c libs/ssd1306.c )
+add_executable(SmartPark main.c libs/ssd1306.c libs/led_matrix.c)
 
 pico_set_program_name(SmartPark "SmartPark")
 pico_set_program_version(SmartPark "0.1")
+
+# Adicionando o arquivo PIO
+pico_generate_pio_header(SmartPark ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR}/generated)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(SmartPark 0)
@@ -49,7 +52,9 @@ target_link_libraries(SmartPark
         pico_stdlib
         hardware_adc
         hardware_pwm
-        hardware_i2c)
+        hardware_i2c
+        hardware_pio
+        hardware_clocks)
 
 # Add the standard include files to the build
 target_include_directories(SmartPark PRIVATE
@@ -58,7 +63,8 @@ target_include_directories(SmartPark PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(SmartPark 
-        
+        hardware_pio
+        hardware_clocks
         )
 
 pico_add_extra_outputs(SmartPark)
